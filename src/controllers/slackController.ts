@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import axios from 'axios';
 import { logger } from '@/utils/logger';
 import { wordpressAPI } from '@/utils/wordpressAPI';
 import { imageDownloader } from '@/utils/imageDownloader';
@@ -8,7 +9,8 @@ import {
   SlackEventPayload,
   ProcessingResult,
   UploadedImage,
-  WordPressPostData
+  WordPressPostData,
+  SlackResponsePayload
 } from '@/types';
 
 class SlackController {
@@ -125,12 +127,19 @@ class SlackController {
         // Create WordPress post
         const postResult = await this.createWordPressPost(messageText, uploadedImages);
 
+        // Send response back to Slack
+        const slackResponseSent = await this.sendSlackResponse(
+          postResult.link,
+          postResult.title || 'Bài viết mới'
+        );
+
         return {
           success: true,
           postId: postResult.id,
           postUrl: postResult.link,
           imagesUploaded: uploadedImages.length,
-          attempt: attempt
+          attempt: attempt,
+          slackResponseSent: slackResponseSent
         };
 
       } catch (error: any) {
@@ -280,11 +289,19 @@ class SlackController {
   private async createWordPressPost(
     messageText: string,
     uploadedImages: UploadedImage[],
-  ): Promise<{ id: number; link: string }> {
-    // Generate title (first 50 characters of text)
-    const title: string = messageText.length > 50
-      ? messageText.substring(0, 50) + '...'
-      : messageText || 'Slack Message';
+  ): Promise<{ id: number; link: string; title: string }> {
+    // Extract first sentence as title (text before first period, question mark, or exclamation mark)
+    let title: string = messageText.split(/[.!?]/)[0].trim();
+    
+    // Remove emojis from title
+    title = title.replace(/[\p{Emoji_Presentation}\p{Emoji}\u200D]+/gu, '').trim();
+    
+    // Fallback to original text if title is empty after removing emojis
+    if (!title) {
+      title = messageText.length > 50
+        ? messageText.substring(0, 50) + '...'
+        : messageText || 'Slack Message';
+    }
 
     // Build content with embedded images
     let content: string = `<p>${messageText.replace(/\n/g, '<br>')}</p>`;
@@ -295,7 +312,6 @@ class SlackController {
       for (const image of uploadedImages) {
         content += `\n<figure class="slack-image">
           <img src="${image.url}" alt="${image.alt_text || 'Slack image'}" />
-          ${image.title ? `<figcaption>${image.title}</figcaption>` : ''}
         </figure>`;
       }
       content += '\n</div>';
@@ -321,8 +337,50 @@ class SlackController {
     const result = await wordpressAPI.createPost(postData);
     return {
       id: result.id,
-      link: result.link
+      link: result.link,
+      title: result.title
     };
+  }
+
+  /**
+   * Send response message back to Slack with WordPress post URL
+   * @param postUrl - URL of the created WordPress post
+   * @param postTitle - Title of the created WordPress post
+   * @returns Promise<boolean> - True if response sent successfully, false otherwise
+   */
+  private async sendSlackResponse(
+    postUrl: string,
+    postTitle: string,
+  ): Promise<boolean> {
+    try {
+      const webhookUrl = process.env.SLACK_RESPONSE_WEBHOOK_URL || process.env.SLACK_WEBHOOK_URL;
+      
+      if (!webhookUrl) {
+        logger.warn('No Slack webhook URL configured for response');
+        return false;
+      }
+
+      const responsePayload: SlackResponsePayload = {
+        text: `✅ Bài viết đã được đăng thành công lên WordPress!`,
+        attachments: [
+          {
+            title: postTitle,
+            title_link: postUrl,
+            text: `Xem bài viết đầy đủ tại link trên`,
+            color: 'good',
+            fallback: `Bài viết "${postTitle}" đã được đăng thành công: ${postUrl}`
+          }
+        ]
+      };
+
+      await axios.post(webhookUrl, responsePayload);
+      logger.info(`Slack response sent successfully for post: ${postUrl}`);
+      return true;
+
+    } catch (error: any) {
+      logger.error('Failed to send Slack response:', error.response?.data || error.message);
+      return false;
+    }
   }
 
   /**

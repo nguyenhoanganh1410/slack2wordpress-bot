@@ -12,6 +12,7 @@ export interface SlackFile {
     name: string;
     mimetype?: string;
     url_private?: string;
+    url_private_download?: string;
     url?: string;
     title?: string;
 }
@@ -49,6 +50,33 @@ export interface SlackEventPayload {
         files?: SlackFile[];
         attachments?: SlackAttachment[];
         blocks?: SlackBlock[];
+    };
+}
+export interface SlackResponsePayload {
+    text?: string;
+    attachments?: SlackResponseAttachment[];
+    blocks?: SlackResponseBlock[];
+}
+export interface SlackResponseAttachment {
+    title: string;
+    title_link?: string;
+    text?: string;
+    color?: string;
+    fallback?: string;
+}
+export interface SlackResponseBlock {
+    type: string;
+    text?: {
+        type: string;
+        text: string;
+    };
+    accessory?: {
+        type: string;
+        text?: {
+            type: string;
+            text: string;
+        };
+        url?: string;
     };
 }
 export interface WordPressMedia {
@@ -112,6 +140,7 @@ export interface ProcessingResult {
     imagesUploaded?: number;
     attempt?: number;
     error?: string;
+    slackResponseSent?: boolean;
 }
 export interface AppError extends Error {
     statusCode?: number;
@@ -123,6 +152,7 @@ export interface EnvConfig {
     NODE_ENV: string;
     SLACK_WEBHOOK_URL?: string;
     SLACK_BOT_TOKEN?: string;
+    SLACK_RESPONSE_WEBHOOK_URL?: string;
     WP_URL: string;
     WP_USERNAME: string;
     WP_PASSWORD: string;

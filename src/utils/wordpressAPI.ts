@@ -1,12 +1,15 @@
 import axios, { AxiosInstance, AxiosResponse } from 'axios';
 import FormData from 'form-data';
 import { logger } from './logger';
-import { 
-  WordPressMedia, 
-  WordPressPost, 
-  WordPressPostData, 
-  WordPressCategory, 
-  WordPressTag 
+import mime from 'mime-types';
+import fileType from 'file-type';
+
+import {
+  WordPressMedia,
+  WordPressPost,
+  WordPressPostData,
+  WordPressCategory,
+  WordPressTag
 } from '@/types';
 
 class WordPressAPI {
@@ -21,7 +24,7 @@ class WordPressAPI {
     this.username = process.env.WP_USERNAME!;
     this.password = process.env.WP_PASSWORD!;
     this.auth = Buffer.from(`${this.username}:${this.password}`).toString('base64');
-    
+
     if (!this.baseURL || !this.username || !this.password) {
       throw new Error('WordPress configuration missing. Please check environment variables.');
     }
@@ -42,13 +45,55 @@ class WordPressAPI {
    * @param filename - Original filename
    * @returns Media object with ID and URL
    */
+  // async uploadMedia(imageData: Buffer, filename: string): Promise<WordPressMedia> {
+  //   try {
+  //     const form = new FormData();
+  //     form.append('file', imageData, {
+  //       filename: filename,
+  //       contentType: 'image/jpeg' // You might want to detect this dynamically
+  //     });
+
+  //     const response: AxiosResponse = await axios.post(
+  //       `${this.baseURL}/wp-json/wp/v2/media`,
+  //       form,
+  //       {
+  //         headers: {
+  //           'Authorization': `Basic ${this.auth}`,
+  //           'Content-Type': `multipart/form-data; charset=utf-8`,
+  //           ...form.getHeaders()
+  //         },
+  //         maxContentLength: Infinity,
+  //         maxBodyLength: Infinity
+  //       }
+  //     );
+
+  //     logger.info(`Media uploaded successfully: ${response.data.id}`);
+
+  //     return {
+  //       id: response.data.id,
+  //       url: response.data.source_url,
+  //       title: response.data.title.rendered,
+  //       alt_text: response.data.alt_text || ''
+  //     };
+  //   } catch (error: any) {
+  //     logger.error('Error uploading media to WordPress:', error.response?.data || error.message);
+  //     throw new Error(`Failed to upload media: ${error.response?.data?.message || error.message}`);
+  //   }
+  // }
+
   async uploadMedia(imageData: Buffer, filename: string): Promise<WordPressMedia> {
     try {
       const form = new FormData();
+
+      const mimeType = mime.lookup(filename) || 'application/octet-stream';
+
       form.append('file', imageData, {
-        filename: filename,
-        contentType: 'image/jpeg' // You might want to detect this dynamically
+        filename,
+        contentType: mimeType
       });
+
+      const detected = await fileType.fileTypeFromBuffer(imageData);
+      console.log('Detected type:', detected);
 
       const response: AxiosResponse = await axios.post(
         `${this.baseURL}/wp-json/wp/v2/media`,
@@ -56,7 +101,6 @@ class WordPressAPI {
         {
           headers: {
             'Authorization': `Basic ${this.auth}`,
-            'Content-Type': `multipart/form-data; charset=utf-8`,
             ...form.getHeaders()
           },
           maxContentLength: Infinity,
@@ -65,7 +109,7 @@ class WordPressAPI {
       );
 
       logger.info(`Media uploaded successfully: ${response.data.id}`);
-      
+
       return {
         id: response.data.id,
         url: response.data.source_url,
@@ -119,7 +163,7 @@ class WordPressAPI {
 
       logger.info(`Post created successfully: ${response.data.id}`);
       logger.info('WordPress response title:', response.data.title.rendered);
-      
+
       return {
         id: response.data.id,
         title: response.data.title.rendered,

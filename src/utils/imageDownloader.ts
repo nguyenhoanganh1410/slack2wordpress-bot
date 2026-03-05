@@ -2,9 +2,9 @@ import axios, { AxiosResponse } from 'axios';
 import fs from 'fs';
 import path from 'path';
 import { logger } from './logger';
-import { 
-  SlackMessage, 
-  DownloadedImage 
+import {
+  SlackMessage,
+  DownloadedImage
 } from '@/types';
 
 class ImageDownloader {
@@ -14,7 +14,7 @@ class ImageDownloader {
   constructor() {
     this.slackToken = process.env.SLACK_BOT_TOKEN;
     this.tempDir = path.join(__dirname, '../../temp');
-    
+
     // Create temp directory if it doesn't exist
     if (!fs.existsSync(this.tempDir)) {
       fs.mkdirSync(this.tempDir, { recursive: true });
@@ -30,12 +30,13 @@ class ImageDownloader {
   async downloadImage(imageUrl: string, filename?: string): Promise<DownloadedImage> {
     try {
       logger.info(`Downloading image from: ${imageUrl}`);
-      
+
       // For Slack private URLs, we need to add authorization header
       const headers: any = {};
       if (imageUrl.includes('files.slack.com') && this.slackToken) {
         headers['Authorization'] = `Bearer ${this.slackToken}`;
       }
+      logger.info(JSON.stringify(headers));
 
       const response: AxiosResponse = await axios.get(imageUrl, {
         responseType: 'arraybuffer',
@@ -44,12 +45,17 @@ class ImageDownloader {
       });
 
       const buffer: Buffer = Buffer.from(response.data);
-      
+
+
+      logger.info(`Response status: ${response.status}`);
+      logger.info(`Final URL: ${response.request?.res?.responseUrl || imageUrl}`);
+      logger.info(`Content-Type: ${response.headers['content-type']}`);
+
       // Generate filename if not provided
       if (!filename) {
         const urlParts = imageUrl.split('/');
         filename = urlParts[urlParts.length - 1] || `image_${Date.now()}`;
-        
+
         // Add extension if missing
         const contentType = response.headers['content-type'];
         if (contentType && contentType.startsWith('image/') && !filename.includes('.')) {
@@ -73,7 +79,7 @@ class ImageDownloader {
    */
   async downloadMultipleImages(imageUrls: string[]): Promise<DownloadedImage[]> {
     const results: DownloadedImage[] = [];
-    
+
     for (let i = 0; i < imageUrls.length; i++) {
       try {
         const image = await this.downloadImage(imageUrls[i], `image_${i + 1}.jpg`);
@@ -83,7 +89,7 @@ class ImageDownloader {
         // Continue with other images even if one fails
       }
     }
-    
+
     return results;
   }
 
@@ -129,7 +135,7 @@ class ImageDownloader {
    */
   extractImageUrls(slackMessage: SlackMessage): string[] {
     const imageUrls: string[] = [];
-    
+
     // Check for files in the message
     if (slackMessage.files && Array.isArray(slackMessage.files)) {
       for (const file of slackMessage.files) {

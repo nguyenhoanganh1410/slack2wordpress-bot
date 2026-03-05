@@ -4,6 +4,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.slackController = void 0;
+const axios_1 = __importDefault(require("axios"));
 const logger_1 = require("@/utils/logger");
 const wordpressAPI_1 = require("@/utils/wordpressAPI");
 const imageDownloader_1 = require("@/utils/imageDownloader");
@@ -80,13 +81,15 @@ class SlackController {
                 const messageText = this.extractMessageText(slackMessage);
                 const imageUrls = imageDownloader_1.imageDownloader.extractImageUrls(slackMessage);
                 const uploadedImages = await this.processImages(imageUrls);
-                const postResult = await this.createWordPressPost(messageText, uploadedImages, slackMessage);
+                const postResult = await this.createWordPressPost(messageText, uploadedImages);
+                const slackResponseSent = await this.sendSlackResponse(postResult.link, postResult.title || 'Bài viết mới');
                 return {
                     success: true,
                     postId: postResult.id,
                     postUrl: postResult.link,
                     imagesUploaded: uploadedImages.length,
-                    attempt: attempt
+                    attempt: attempt,
+                    slackResponseSent: slackResponseSent
                 };
             }
             catch (error) {
@@ -176,32 +179,24 @@ class SlackController {
             }
         }
     }
-    async createWordPressPost(messageText, uploadedImages, slackMessage) {
-        const title = messageText.length > 50
-            ? messageText.substring(0, 50) + '...'
-            : messageText || 'Slack Message';
+    async createWordPressPost(messageText, uploadedImages) {
+        let title = messageText.split(/[.!?]/)[0].trim();
+        title = title.replace(/[\p{Emoji_Presentation}\p{Emoji}\u200D]+/gu, '').trim();
+        if (!title) {
+            title = messageText.length > 50
+                ? messageText.substring(0, 50) + '...'
+                : messageText || 'Slack Message';
+        }
         let content = `<p>${messageText.replace(/\n/g, '<br>')}</p>`;
         if (uploadedImages.length > 0) {
             content += '\n<div class="slack-images">';
             for (const image of uploadedImages) {
                 content += `\n<figure class="slack-image">
           <img src="${image.url}" alt="${image.alt_text || 'Slack image'}" />
-          ${image.title ? `<figcaption>${image.title}</figcaption>` : ''}
         </figure>`;
             }
             content += '\n</div>';
         }
-        content += '\n<hr />';
-        content += '\n<div class="slack-metadata">';
-        content += `\n<p><small><em>Posted from Slack`;
-        if (slackMessage.user) {
-            content += ` by user ${slackMessage.user}`;
-        }
-        if (slackMessage.channel) {
-            content += ` in channel ${slackMessage.channel}`;
-        }
-        content += ` on ${new Date().toLocaleString()}</em></small></p>`;
-        content += '\n</div>';
         const postData = {
             title: title,
             content: content,
@@ -215,8 +210,37 @@ class SlackController {
         const result = await wordpressAPI_1.wordpressAPI.createPost(postData);
         return {
             id: result.id,
-            link: result.link
+            link: result.link,
+            title: result.title
         };
+    }
+    async sendSlackResponse(postUrl, postTitle) {
+        try {
+            const webhookUrl = process.env.SLACK_RESPONSE_WEBHOOK_URL || process.env.SLACK_WEBHOOK_URL;
+            if (!webhookUrl) {
+                logger_1.logger.warn('No Slack webhook URL configured for response');
+                return false;
+            }
+            const responsePayload = {
+                text: `✅ Bài viết đã được đăng thành công lên WordPress!`,
+                attachments: [
+                    {
+                        title: postTitle,
+                        title_link: postUrl,
+                        text: `Xem bài viết đầy đủ tại link trên`,
+                        color: 'good',
+                        fallback: `Bài viết "${postTitle}" đã được đăng thành công: ${postUrl}`
+                    }
+                ]
+            };
+            await axios_1.default.post(webhookUrl, responsePayload);
+            logger_1.logger.info(`Slack response sent successfully for post: ${postUrl}`);
+            return true;
+        }
+        catch (error) {
+            logger_1.logger.error('Failed to send Slack response:', error.response?.data || error.message);
+            return false;
+        }
     }
     sleep(ms) {
         return new Promise(resolve => setTimeout(resolve, ms));

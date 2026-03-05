@@ -8,6 +8,7 @@ declare class SlackController {
     private extractMessageText;
     private processImages;
     private createWordPressPost;
+    private sendSlackResponse;
     private sleep;
 }
 export declare const slackController: SlackController;

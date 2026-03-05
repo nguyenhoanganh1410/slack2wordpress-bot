@@ -23,12 +23,16 @@ class ImageDownloader {
             if (imageUrl.includes('files.slack.com') && this.slackToken) {
                 headers['Authorization'] = `Bearer ${this.slackToken}`;
             }
+            logger_1.logger.info(JSON.stringify(headers));
             const response = await axios_1.default.get(imageUrl, {
                 responseType: 'arraybuffer',
                 headers,
                 timeout: 30000
             });
             const buffer = Buffer.from(response.data);
+            logger_1.logger.info(`Response status: ${response.status}`);
+            logger_1.logger.info(`Final URL: ${response.request?.res?.responseUrl || imageUrl}`);
+            logger_1.logger.info(`Content-Type: ${response.headers['content-type']}`);
             if (!filename) {
                 const urlParts = imageUrl.split('/');
                 filename = urlParts[urlParts.length - 1] || `image_${Date.now()}`;

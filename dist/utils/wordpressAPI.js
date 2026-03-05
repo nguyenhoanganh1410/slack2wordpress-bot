@@ -7,6 +7,8 @@ exports.wordpressAPI = void 0;
 const axios_1 = __importDefault(require("axios"));
 const form_data_1 = __importDefault(require("form-data"));
 const logger_1 = require("./logger");
+const mime_types_1 = __importDefault(require("mime-types"));
+const file_type_1 = __importDefault(require("file-type"));
 class WordPressAPI {
     constructor() {
         this.baseURL = process.env.WP_URL;
@@ -27,14 +29,16 @@ class WordPressAPI {
     async uploadMedia(imageData, filename) {
         try {
             const form = new form_data_1.default();
+            const mimeType = mime_types_1.default.lookup(filename) || 'application/octet-stream';
             form.append('file', imageData, {
-                filename: filename,
-                contentType: 'image/jpeg'
+                filename,
+                contentType: mimeType
             });
+            const detected = await file_type_1.default.fileTypeFromBuffer(imageData);
+            console.log('Detected type:', detected);
             const response = await axios_1.default.post(`${this.baseURL}/wp-json/wp/v2/media`, form, {
                 headers: {
                     'Authorization': `Basic ${this.auth}`,
-                    'Content-Type': `multipart/form-data; charset=utf-8`,
                     ...form.getHeaders()
                 },
                 maxContentLength: Infinity,
