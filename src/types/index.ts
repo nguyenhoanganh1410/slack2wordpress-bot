@@ -89,6 +89,26 @@ export interface SlackResponseBlock {
   };
 }
 
+export interface SlackErrorResponsePayload {
+  text: string;
+  attachments?: SlackErrorResponseAttachment[];
+  blocks?: SlackResponseBlock[];
+}
+
+export interface SlackErrorResponseAttachment {
+  title: string;
+  text: string;
+  color: string;
+  fallback: string;
+  fields?: SlackErrorField[];
+}
+
+export interface SlackErrorField {
+  title: string;
+  value: string;
+  short?: boolean;
+}
+
 // WordPress Types
 export interface WordPressMedia {
   id: number;
@@ -171,6 +191,21 @@ export interface AppError extends Error {
   statusCode?: number;
   code?: string;
   details?: any;
+}
+
+export enum WordPressErrorType {
+  AUTHENTICATION = 'authentication',
+  NETWORK = 'network',
+  VALIDATION = 'validation',
+  MEDIA_UPLOAD = 'media_upload',
+  SERVER_ERROR = 'server_error',
+  UNKNOWN = 'unknown'
+}
+
+export interface WordPressError extends AppError {
+  type: WordPressErrorType;
+  endpoint?: string;
+  response?: any;
 }
 
 // Environment Types

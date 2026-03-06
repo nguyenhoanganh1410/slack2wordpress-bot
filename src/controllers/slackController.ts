@@ -10,7 +10,10 @@ import {
   ProcessingResult,
   UploadedImage,
   WordPressPostData,
-  SlackResponsePayload
+  SlackResponsePayload,
+  SlackErrorResponsePayload,
+  SlackErrorField,
+  WordPressErrorType
 } from '@/types';
 import { extractTitle } from '@/utils/contentUtils';
 
@@ -40,8 +43,15 @@ class SlackController {
         .then(result => {
           logger.info('Slack message processed successfully:', result);
         })
-        .catch(error => {
+        .catch(async (error) => {
           logger.error('Error processing Slack message:', error);
+          
+          // Send final error notification if all retries failed
+          await this.sendSlackErrorResponse(
+            error,
+            parseInt(process.env.MAX_RETRIES || '3', 10),
+            parseInt(process.env.MAX_RETRIES || '3', 10)
+          );
         });
 
       // Respond immediately to Slack (webhook timeout is 3 seconds)
@@ -88,8 +98,15 @@ class SlackController {
           .then(result => {
             logger.info('Slack event processed successfully:', result);
           })
-          .catch(error => {
+          .catch(async (error) => {
             logger.error('Error processing Slack event:', error);
+            
+            // Send final error notification if all retries failed
+            await this.sendSlackErrorResponse(
+              error,
+              parseInt(process.env.MAX_RETRIES || '3', 10),
+              parseInt(process.env.MAX_RETRIES || '3', 10)
+            );
           });
       }
 
@@ -113,6 +130,8 @@ class SlackController {
     const retryDelay: number = parseInt(process.env.RETRY_DELAY || '1000', 10);
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      let imageUrls: string[] = [];
+      
       try {
         logger.info(`Processing Slack message (attempt ${attempt}/${maxRetries})`);
 
@@ -122,11 +141,11 @@ class SlackController {
         const messageText: string = this.extractMessageText(slackMessage);
 
         // Extract image URLs
-        const imageUrls: string[] = imageDownloader.extractImageUrls(slackMessage);
+        imageUrls = imageDownloader.extractImageUrls(slackMessage);
 
         // Download and upload images
         const uploadedImages: UploadedImage[] = await this.processImages(imageUrls);
-
+ 
         // Create WordPress post
         const postResult = await this.createWordPressPost(messageText, uploadedImages, titleContent);
 
@@ -147,7 +166,6 @@ class SlackController {
 
       } catch (error: any) {
         logger.error(`Attempt ${attempt} failed:`, error.message);
-
         if (attempt === maxRetries) {
           throw error;
         }
@@ -249,6 +267,8 @@ class SlackController {
   private async processImages(imageUrls: string[]): Promise<UploadedImage[]> {
     const uploadedImages: UploadedImage[] = [];
     const tempFiles: string[] = [];
+    let successCount = 0;
+    let failureCount = 0;
 
     try {
       if (imageUrls.length === 0) {
@@ -265,11 +285,21 @@ class SlackController {
         try {
           const uploadedImage = await wordpressAPI.uploadMedia(image.buffer, image.filename);
           uploadedImages.push(uploadedImage);
+          successCount++;
           logger.info(`Image uploaded to WordPress: ${uploadedImage.url}`);
         } catch (error: any) {
+          failureCount++;
           logger.error(`Failed to upload image ${image.filename}:`, error.message);
           // Continue with other images
         }
+      }
+
+      // Log summary
+      logger.info(`Image processing complete: ${successCount} successful, ${failureCount} failed`);
+
+      // If all uploads failed, throw an error to trigger Slack notification
+      if (failureCount === imageUrls.length && imageUrls.length > 0) {
+        throw new Error(`Failed to upload all ${imageUrls.length} images to WordPress`);
       }
 
       return uploadedImages;
@@ -377,6 +407,133 @@ class SlackController {
 
     } catch (error: any) {
       logger.error('Failed to send Slack response:', error.response?.data || error.message);
+      return false;
+    }
+  }
+
+  /**
+   * Send error notification back to Slack when WordPress posting fails
+   * @param error - The error that occurred
+   * @param attempt - Current attempt number
+   * @param maxRetries - Maximum number of retries
+   * @param partialSuccess - Information about partial success (e.g., some images uploaded)
+   * @returns Promise<boolean> - True if error response sent successfully, false otherwise
+   */
+  private async sendSlackErrorResponse(
+    error: any,
+    attempt: number,
+    maxRetries: number,
+    partialSuccess?: { imagesUploaded: number; totalImages: number }
+  ): Promise<boolean> {
+    try {
+      const webhookUrl = process.env.SLACK_RESPONSE_WEBHOOK_URL || process.env.SLACK_WEBHOOK_URL;
+      
+      if (!webhookUrl) {
+        logger.warn('No Slack webhook URL configured for error response');
+        return false;
+      }
+
+      // Determine error type and create appropriate message
+      let errorIcon = '❌';
+      let errorColor = 'danger';
+      let errorTitle = 'Lỗi đăng bài WordPress';
+      let errorMessage = error.message || 'Lỗi không xác định';
+      let suggestion = '';
+
+      // Handle WordPress errors specifically
+      if (error.type) {
+        switch (error.type) {
+          case WordPressErrorType.AUTHENTICATION:
+            errorIcon = '🔐';
+            errorTitle = 'Lỗi xác thực WordPress';
+            suggestion = 'Kiểm tra lại tên đăng nhập và mật khẩu WordPress trong cấu hình';
+            break;
+          
+          case WordPressErrorType.NETWORK:
+            errorIcon = '🌐';
+            errorTitle = 'Lỗi kết nối WordPress';
+            suggestion = 'Kiểm tra kết nối mạng và URL của trang WordPress';
+            errorColor = 'warning';
+            break;
+          
+          case WordPressErrorType.VALIDATION:
+            errorIcon = '⚠️';
+            errorTitle = 'Lỗi dữ liệu';
+            suggestion = 'Kiểm tra lại nội dung bài viết, có thể chứa ký tự không hợp lệ';
+            errorColor = 'warning';
+            break;
+          
+          case WordPressErrorType.MEDIA_UPLOAD:
+            errorIcon = '🖼️';
+            errorTitle = 'Lỗi tải ảnh lên';
+            suggestion = 'Kiểm tra kích thước và định dạng file ảnh';
+            errorColor = 'warning';
+            break;
+          
+          case WordPressErrorType.SERVER_ERROR:
+            errorIcon = '🔥';
+            errorTitle = 'Lỗi máy chủ WordPress';
+            suggestion = 'Máy chủ WordPress đang gặp sự cố, vui lòng thử lại sau';
+            break;
+        }
+      }
+
+      // Build fields for the error message
+      const fields: SlackErrorField[] = [
+        {
+          title: 'Lần thử',
+          value: `${attempt}/${maxRetries}`,
+          short: true
+        },
+        {
+          title: 'Thời gian',
+          value: new Date().toLocaleString('vi-VN'),
+          short: true
+        }
+      ];
+
+      // Add partial success information if available
+      if (partialSuccess && partialSuccess.imagesUploaded > 0) {
+        fields.push({
+          title: 'Ảnh đã tải lên',
+          value: `${partialSuccess.imagesUploaded}/${partialSuccess.totalImages}`,
+          short: true
+        });
+      }
+
+      // Add error details for debugging (only in development or if enabled)
+      if (process.env.NODE_ENV === 'development' || process.env.ENABLE_DETAILED_ERRORS === 'true') {
+        fields.push({
+          title: 'Chi tiết lỗi',
+          value: `\`${error.endpoint || 'N/A'}\`\n\`${error.statusCode || 'N/A'}\``,
+          short: false
+        });
+      }
+
+      const errorResponsePayload: SlackErrorResponsePayload = {
+        text: `${errorIcon} ${errorTitle}: ${errorMessage}`,
+        attachments: [
+          {
+            title: errorTitle,
+            text: `${errorMessage}${suggestion ? `\n\n💡 *Gợi ý:* ${suggestion}` : ''}`,
+            color: errorColor,
+            fallback: `${errorTitle}: ${errorMessage}`,
+            fields: fields
+          }
+        ]
+      };
+
+      // Add mention if configured for critical errors
+      if (process.env.SLACK_ERROR_MENTION_USER && error.type !== WordPressErrorType.VALIDATION) {
+        errorResponsePayload.text = `<@${process.env.SLACK_ERROR_MENTION_USER}> ${errorResponsePayload.text}`;
+      }
+
+      await axios.post(webhookUrl, errorResponsePayload);
+      logger.info(`Slack error response sent successfully for attempt: ${attempt}/${maxRetries}`);
+      return true;
+
+    } catch (error: any) {
+      logger.error('Failed to send Slack error response:', error.response?.data || error.message);
       return false;
     }
   }

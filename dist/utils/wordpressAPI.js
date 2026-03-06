@@ -9,6 +9,7 @@ const form_data_1 = __importDefault(require("form-data"));
 const logger_1 = require("./logger");
 const mime_types_1 = __importDefault(require("mime-types"));
 const file_type_1 = __importDefault(require("file-type"));
+const types_1 = require("../types");
 class WordPressAPI {
     constructor() {
         this.baseURL = process.env.WP_URL;
@@ -25,6 +26,90 @@ class WordPressAPI {
                 'Content-Type': 'application/json; charset=utf-8'
             }
         });
+    }
+    categorizeError(error, endpoint) {
+        if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND' || error.code === 'ETIMEDOUT') {
+            return {
+                name: 'WordPressError',
+                message: `Không thể kết nối đến WordPress: ${error.message}`,
+                type: types_1.WordPressErrorType.NETWORK,
+                statusCode: 503,
+                endpoint,
+                response: error.response
+            };
+        }
+        if (error.response) {
+            const status = error.response.status;
+            const data = error.response.data;
+            switch (status) {
+                case 401:
+                    return {
+                        name: 'WordPressError',
+                        message: 'Lỗi xác thực WordPress: Tên đăng nhập hoặc mật khẩu không đúng',
+                        type: types_1.WordPressErrorType.AUTHENTICATION,
+                        statusCode: status,
+                        endpoint,
+                        response: data
+                    };
+                case 403:
+                    return {
+                        name: 'WordPressError',
+                        message: 'Lỗi quyền truy cập WordPress: Tài khoản không có quyền đăng bài',
+                        type: types_1.WordPressErrorType.AUTHENTICATION,
+                        statusCode: status,
+                        endpoint,
+                        response: data
+                    };
+                case 400:
+                case 422:
+                    return {
+                        name: 'WordPressError',
+                        message: `Lỗi dữ liệu: ${data?.message || 'Dữ liệu không hợp lệ'}`,
+                        type: types_1.WordPressErrorType.VALIDATION,
+                        statusCode: status,
+                        endpoint,
+                        response: data
+                    };
+                case 413:
+                    return {
+                        name: 'WordPressError',
+                        message: 'File quá lớn: Vui lòng giảm kích thước hình ảnh',
+                        type: types_1.WordPressErrorType.MEDIA_UPLOAD,
+                        statusCode: status,
+                        endpoint,
+                        response: data
+                    };
+                case 500:
+                case 502:
+                case 503:
+                case 504:
+                    return {
+                        name: 'WordPressError',
+                        message: `Lỗi máy chủ WordPress: ${data?.message || 'Máy chủ đang gặp sự cố'}`,
+                        type: types_1.WordPressErrorType.SERVER_ERROR,
+                        statusCode: status,
+                        endpoint,
+                        response: data
+                    };
+                default:
+                    return {
+                        name: 'WordPressError',
+                        message: `Lỗi WordPress (${status}): ${data?.message || error.message}`,
+                        type: types_1.WordPressErrorType.UNKNOWN,
+                        statusCode: status,
+                        endpoint,
+                        response: data
+                    };
+            }
+        }
+        return {
+            name: 'WordPressError',
+            message: `Lỗi không xác định: ${error.message}`,
+            type: types_1.WordPressErrorType.UNKNOWN,
+            statusCode: 500,
+            endpoint,
+            response: error.response
+        };
     }
     async uploadMedia(imageData, filename) {
         try {
@@ -53,8 +138,9 @@ class WordPressAPI {
             };
         }
         catch (error) {
-            logger_1.logger.error('Error uploading media to WordPress:', error.response?.data || error.message);
-            throw new Error(`Failed to upload media: ${error.response?.data?.message || error.message}`);
+            const wpError = this.categorizeError(error, '/wp-json/wp/v2/media');
+            logger_1.logger.error('Error uploading media to WordPress:', wpError);
+            throw wpError;
         }
     }
     async createPost(postData) {
@@ -95,8 +181,9 @@ class WordPressAPI {
             };
         }
         catch (error) {
-            logger_1.logger.error('Error creating post in WordPress:', error.response?.data || error.message);
-            throw new Error(`Failed to create post: ${error.response?.data?.message || error.message}`);
+            const wpError = this.categorizeError(error, '/wp-json/wp/v2/posts');
+            logger_1.logger.error('Error creating post in WordPress:', wpError);
+            throw wpError;
         }
     }
     async testConnection() {

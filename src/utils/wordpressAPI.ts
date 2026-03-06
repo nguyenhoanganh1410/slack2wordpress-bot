@@ -9,7 +9,9 @@ import {
   WordPressPost,
   WordPressPostData,
   WordPressCategory,
-  WordPressTag
+  WordPressTag,
+  WordPressError,
+  WordPressErrorType
 } from '@/types';
 
 class WordPressAPI {
@@ -37,6 +39,108 @@ class WordPressAPI {
         'Content-Type': 'application/json; charset=utf-8'
       }
     });
+  }
+
+  /**
+   * Categorize WordPress API errors for better handling
+   * @param error - The original error from axios or other sources
+   * @param endpoint - The API endpoint that was being called
+   * @returns Categorized WordPressError
+   */
+  private categorizeError(error: any, endpoint: string): WordPressError {
+    // Network/Connection errors
+    if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND' || error.code === 'ETIMEDOUT') {
+      return {
+        name: 'WordPressError',
+        message: `Không thể kết nối đến WordPress: ${error.message}`,
+        type: WordPressErrorType.NETWORK,
+        statusCode: 503,
+        endpoint,
+        response: error.response
+      };
+    }
+
+    // HTTP response errors
+    if (error.response) {
+      const status = error.response.status;
+      const data = error.response.data;
+
+      switch (status) {
+        case 401:
+          return {
+            name: 'WordPressError',
+            message: 'Lỗi xác thực WordPress: Tên đăng nhập hoặc mật khẩu không đúng',
+            type: WordPressErrorType.AUTHENTICATION,
+            statusCode: status,
+            endpoint,
+            response: data
+          };
+        
+        case 403:
+          return {
+            name: 'WordPressError',
+            message: 'Lỗi quyền truy cập WordPress: Tài khoản không có quyền đăng bài',
+            type: WordPressErrorType.AUTHENTICATION,
+            statusCode: status,
+            endpoint,
+            response: data
+          };
+        
+        case 400:
+        case 422:
+          return {
+            name: 'WordPressError',
+            message: `Lỗi dữ liệu: ${data?.message || 'Dữ liệu không hợp lệ'}`,
+            type: WordPressErrorType.VALIDATION,
+            statusCode: status,
+            endpoint,
+            response: data
+          };
+        
+        case 413:
+          return {
+            name: 'WordPressError',
+            message: 'File quá lớn: Vui lòng giảm kích thước hình ảnh',
+            type: WordPressErrorType.MEDIA_UPLOAD,
+            statusCode: status,
+            endpoint,
+            response: data
+          };
+        
+        case 500:
+        case 502:
+        case 503:
+        case 504:
+          return {
+            name: 'WordPressError',
+            message: `Lỗi máy chủ WordPress: ${data?.message || 'Máy chủ đang gặp sự cố'}`,
+            type: WordPressErrorType.SERVER_ERROR,
+            statusCode: status,
+            endpoint,
+            response: data
+          };
+        
+        default:
+          return {
+            name: 'WordPressError',
+            message: `Lỗi WordPress (${status}): ${data?.message || error.message}`,
+            type: WordPressErrorType.UNKNOWN,
+            statusCode: status,
+            endpoint,
+            response: data
+          };
+      }
+    }
+
+    // Other errors
+    return {
+      name: 'WordPressError',
+      message: `Lỗi không xác định: ${error.message}`,
+      type: WordPressErrorType.UNKNOWN,
+      statusCode: 500,
+      endpoint,
+      response: error.response
+    };
   }
 
   /**
@@ -117,8 +221,9 @@ class WordPressAPI {
         alt_text: response.data.alt_text || ''
       };
     } catch (error: any) {
-      logger.error('Error uploading media to WordPress:', error.response?.data || error.message);
-      throw new Error(`Failed to upload media: ${error.response?.data?.message || error.message}`);
+      const wpError = this.categorizeError(error, '/wp-json/wp/v2/media');
+      logger.error('Error uploading media to WordPress:', wpError);
+      throw wpError;
     }
   }
 
@@ -173,8 +278,9 @@ class WordPressAPI {
         featured_media: response.data.featured_media
       };
     } catch (error: any) {
-      logger.error('Error creating post in WordPress:', error.response?.data || error.message);
-      throw new Error(`Failed to create post: ${error.response?.data?.message || error.message}`);
+      const wpError = this.categorizeError(error, '/wp-json/wp/v2/posts');
+      logger.error('Error creating post in WordPress:', wpError);
+      throw wpError;
     }
   }
 

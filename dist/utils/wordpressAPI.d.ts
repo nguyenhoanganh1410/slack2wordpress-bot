@@ -6,6 +6,7 @@ declare class WordPressAPI {
     private auth;
     private axiosInstance;
     constructor();
+    private categorizeError;
     uploadMedia(imageData: Buffer, filename: string): Promise<WordPressMedia>;
     createPost(postData: WordPressPostData): Promise<WordPressPost>;
     testConnection(): Promise<boolean>;
