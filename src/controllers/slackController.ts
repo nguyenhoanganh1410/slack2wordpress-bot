@@ -12,6 +12,7 @@ import {
   WordPressPostData,
   SlackResponsePayload
 } from '@/types';
+import { extractTitle } from '@/utils/contentUtils';
 
 class SlackController {
   /**
@@ -115,6 +116,8 @@ class SlackController {
       try {
         logger.info(`Processing Slack message (attempt ${attempt}/${maxRetries})`);
 
+        const titleContent: string = extractTitle(slackMessage.text || '');
+        logger.info(`Title content: ${titleContent}`);
         // Extract message text
         const messageText: string = this.extractMessageText(slackMessage);
 
@@ -125,7 +128,7 @@ class SlackController {
         const uploadedImages: UploadedImage[] = await this.processImages(imageUrls);
 
         // Create WordPress post
-        const postResult = await this.createWordPressPost(messageText, uploadedImages);
+        const postResult = await this.createWordPressPost(messageText, uploadedImages, titleContent);
 
         // Send response back to Slack
         const slackResponseSent = await this.sendSlackResponse(
@@ -289,13 +292,8 @@ class SlackController {
   private async createWordPressPost(
     messageText: string,
     uploadedImages: UploadedImage[],
+    title: string
   ): Promise<{ id: number; link: string; title: string }> {
-    // Extract first sentence as title (text before first period, question mark, or exclamation mark)
-    let title: string = messageText.split(/[.!?]/)[0].trim();
-    
-    // Remove emojis from title
-    title = title.replace(/[\p{Emoji_Presentation}\p{Emoji}\u200D]+/gu, '').trim();
-    
     // Fallback to original text if title is empty after removing emojis
     if (!title) {
       title = messageText.length > 50
