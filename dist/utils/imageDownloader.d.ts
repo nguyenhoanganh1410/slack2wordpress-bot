@@ -1,4 +1,4 @@
-import { SlackMessage, DownloadedImage } from '@/types';
+import { SlackMessage, DownloadedImage } from '../types';
 declare class ImageDownloader {
     private slackToken;
     private tempDir;

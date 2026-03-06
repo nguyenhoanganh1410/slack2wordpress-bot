@@ -5,9 +5,9 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.slackController = void 0;
 const axios_1 = __importDefault(require("axios"));
-const logger_1 = require("@/utils/logger");
-const wordpressAPI_1 = require("@/utils/wordpressAPI");
-const imageDownloader_1 = require("@/utils/imageDownloader");
+const logger_1 = require("../utils/logger");
+const wordpressAPI_1 = require("../utils/wordpressAPI");
+const imageDownloader_1 = require("../utils/imageDownloader");
 const emoji_js_1 = __importDefault(require("emoji-js"));
 class SlackController {
     async handleSlackWebhook(req, res) {

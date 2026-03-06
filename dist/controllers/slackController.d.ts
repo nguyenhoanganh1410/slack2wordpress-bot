@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { SlackWebhookPayload, ProcessingResult } from '@/types';
+import { SlackWebhookPayload, ProcessingResult } from '../types';
 declare class SlackController {
     handleSlackWebhook(req: Request, res: Response): Promise<void>;
     handleSlackEvent(req: Request, res: Response): Promise<void>;

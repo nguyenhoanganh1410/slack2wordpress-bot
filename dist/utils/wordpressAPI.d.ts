@@ -1,4 +1,4 @@
-import { WordPressMedia, WordPressPost, WordPressPostData, WordPressCategory, WordPressTag } from '@/types';
+import { WordPressMedia, WordPressPost, WordPressPostData, WordPressCategory, WordPressTag } from '../types';
 declare class WordPressAPI {
     private baseURL;
     private username;
