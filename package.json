@@ -9,6 +9,7 @@
     "build": "tsc && tsc-alias",
     "build:watch": "tsc --watch",
     "clean": "rimraf dist",
+    "init-db": "node scripts/init-db.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
@@ -34,6 +35,7 @@
     "express": "^4.18.2",
     "file-type": "^21.3.0",
     "mime-types": "^3.0.2",
+    "mongoose": "^8.0.0",
     "multer": "^2.0.1",
     "sharp": "^0.33.0",
     "tsc-alias": "^1.8.16",

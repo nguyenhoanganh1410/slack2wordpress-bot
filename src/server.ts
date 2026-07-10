@@ -8,6 +8,7 @@ import { logger } from '@/utils/logger';
 import { slackController } from '@/controllers/slackController';
 import { errorHandler } from '@/middleware/errorHandler';
 import { HealthCheckResponse } from '@/types';
+import '@/utils/database'; // Initialize database connection
 
 const app: Application = express();
 const PORT: number = parseInt(process.env.PORT || '3000', 10);
@@ -31,6 +32,9 @@ app.post('/webhook/slack', slackController.handleSlackWebhook.bind(slackControll
 
 // Slack Events API endpoint (alternative to webhook)
 app.post('/events/slack', slackController.handleSlackEvent.bind(slackController));
+
+// Slack Interactivity endpoint (button clicks, etc.)
+app.post('/interactive/slack', slackController.handleSlackInteractivity.bind(slackController));
 
 // Error handling middleware
 app.use(errorHandler);

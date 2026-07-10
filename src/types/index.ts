@@ -56,6 +56,7 @@ export interface SlackEventPayload {
     files?: SlackFile[];
     attachments?: SlackAttachment[];
     blocks?: SlackBlock[];
+    client_msg_id?: string;
   };
 }
 
@@ -224,6 +225,8 @@ export interface EnvConfig {
   MAX_RETRIES: number;
   RETRY_DELAY: number;
   LOG_LEVEL?: string;
+  MONGODB_URI?: string;
+  DB_NAME?: string;
 }
 
 // Logger Types
@@ -232,4 +235,73 @@ export interface LogInfo {
   timestamp?: string;
   level?: string;
   metadata?: any;
+}
+
+// Platform Types
+export enum Platform {
+  WORDPRESS = 'wordpress',
+  FACEBOOK = 'facebook',
+  ALL = 'all'
+}
+
+export interface PlatformResult {
+  platform: Platform;
+  success: boolean;
+  postId?: string;
+  postUrl?: string;
+  error?: string;
+}
+
+export interface MultiPlatformResult extends ProcessingResult {
+  platforms: PlatformResult[];
+}
+
+// Extended Slack Types for Platform Selection
+export interface SlackWebhookPayloadExtended extends SlackWebhookPayload {
+  platform?: Platform;
+  isPlatformSelection?: boolean;
+  selectedPlatform?: Platform;
+}
+
+export interface SlackInteractivePayload {
+  type: string;
+  user: {
+    id: string;
+    username: string;
+  };
+  channel: {
+    id: string;
+  };
+  actions: Array<{
+    action_id: string;
+    block_id: string;
+    value: string;
+  }>;
+  response_url: string;
+}
+
+// Platform Configuration Types
+export interface PlatformConfig {
+  wordpress?: {
+    url: string;
+    username: string;
+    password: string;
+    defaultCategoryId?: number;
+    defaultTagIds?: number[];
+    defaultPostStatus?: string;
+  };
+  facebook?: {
+    pageId?: string;
+    accessToken?: string;
+    pageAccessToken?: string;
+  };
+}
+
+// Pending Selection State (for in-memory storage)
+export interface PendingSelection {
+  userId: string;
+  channelId: string;
+  originalMessage: SlackWebhookPayload;
+  timestamp: number;
+  expiresAt: number;
 }
