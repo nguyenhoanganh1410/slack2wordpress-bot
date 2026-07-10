@@ -221,7 +221,7 @@ export interface EnvConfig {
   DEFAULT_POST_STATUS: string;
   DEFAULT_CATEGORY_ID?: string;
   DEFAULT_TAG_IDS?: string;
-  MAX_RETRIES: number;
+  MAX_RETRIES_KEY: number;
   RETRY_DELAY: number;
   LOG_LEVEL?: string;
 }

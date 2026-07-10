@@ -92,7 +92,7 @@ DEFAULT_CATEGORY_ID=1
 DEFAULT_TAG_IDS=1,2,3
 
 # Retry Configuration
-MAX_RETRIES=3
+MAX_RETRIES_KEY=1
 RETRY_DELAY=1000
 ```
 
@@ -288,7 +288,7 @@ docker-compose up -d
 | `DEFAULT_POST_STATUS` | No | Post status (publish/draft) |
 | `DEFAULT_CATEGORY_ID` | No | Default category ID |
 | `DEFAULT_TAG_IDS` | No | Comma-separated tag IDs |
-| `MAX_RETRIES` | No | Max retry attempts (default: 3) |
+| `MAX_RETRIES_KEY` | No | Max retry attempts (default: 3) |
 | `RETRY_DELAY` | No | Retry delay in ms (default: 1000) |
 
 *Either webhook URL or bot token is required

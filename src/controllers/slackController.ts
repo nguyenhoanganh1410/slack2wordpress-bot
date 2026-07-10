@@ -49,8 +49,8 @@ class SlackController {
           // Send final error notification if all retries failed
           await this.sendSlackErrorResponse(
             error,
-            parseInt(process.env.MAX_RETRIES || '1', 10),
-            parseInt(process.env.MAX_RETRIES || '1', 10)
+            parseInt(process.env.MAX_RETRIES_KEY || '1', 10),
+            parseInt(process.env.MAX_RETRIES_KEY || '1', 10)
           );
         });
 
@@ -104,8 +104,8 @@ class SlackController {
             // Send final error notification if all retries failed
             await this.sendSlackErrorResponse(
               error,
-              parseInt(process.env.MAX_RETRIES || '1', 10),
-              parseInt(process.env.MAX_RETRIES || '1', 10)
+              parseInt(process.env.MAX_RETRIES_KEY || '1', 10),
+              parseInt(process.env.MAX_RETRIES_KEY || '1', 10)
             );
           });
       }
@@ -126,7 +126,7 @@ class SlackController {
    * @returns Processing result
    */
   async processSlackMessage(slackMessage: SlackWebhookPayload): Promise<ProcessingResult> {
-    const maxRetries: number = parseInt(process.env.MAX_RETRIES || '1', 10);
+    const maxRetries: number = parseInt(process.env.MAX_RETRIES_KEY || '1', 10);
     const retryDelay: number = parseInt(process.env.RETRY_DELAY || '1000', 10);
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
