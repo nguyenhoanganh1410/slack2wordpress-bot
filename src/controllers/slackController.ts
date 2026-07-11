@@ -15,7 +15,7 @@ import {
   SlackErrorField,
   WordPressErrorType
 } from '@/types';
-import { extractTitle } from '@/utils/contentUtils';
+import { extractTitle, normalizeSlackContent } from '@/utils/contentUtils';
 
 class SlackController {
   /**
@@ -233,14 +233,17 @@ class SlackController {
     // Convert Slack shortcodes to Unicode emojis
     text = this.convertSlackShortcodesToUnicode(text);
 
+    // Convert Slack-style links like <tel:...|...> into HTML anchors
+    text = normalizeSlackContent(text);
+
     // Add attachment text
     if (slackMessage.attachments && Array.isArray(slackMessage.attachments)) {
       for (const attachment of slackMessage.attachments) {
         if (attachment.text) {
-          text += '\n\n' + this.convertSlackShortcodesToUnicode(attachment.text);
+          text += '\n\n' + normalizeSlackContent(this.convertSlackShortcodesToUnicode(attachment.text));
         }
         if (attachment.fallback) {
-          text += '\n\n' + this.convertSlackShortcodesToUnicode(attachment.fallback);
+          text += '\n\n' + normalizeSlackContent(this.convertSlackShortcodesToUnicode(attachment.fallback));
         }
       }
     }
